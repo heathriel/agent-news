@@ -57,16 +57,19 @@ fetch_hn() {
     for id in $ids; do
         local item=$(curl -s "https://hacker-news.firebaseio.com/v0/item/$id.json")
         local title=$(echo "$item" | jq -r '.title // empty')
-        local url=$(echo "$item" | jq -r '.url // empty')
-        local score=$(echo "$item" | jq -r '.score // 0')
         
         # Check if matches agent keywords (case insensitive)
         if echo "$title" | grep -iE "$AGENT_KEYWORDS" > /dev/null 2>&1; then
-            results+=("{\"source\":\"hn\",\"title\":\"$title\",\"url\":\"$url\",\"score\":$score}")
+            # Serialize the original fields with jq so quotes, backslashes,
+            # and control characters in story text remain valid JSON.
+            results+=("$(printf '%s\n' "$item" | jq -c '
+                {source: "hn", title: .title, url: (.url // ""), score: (.score // 0)}
+            ')")
         fi
     done
     
-    echo "[${results[*]:-}]" | jq -s 'add // []'
+    # Slurp separate objects into one array, including the empty-result case.
+    printf '%s\n' "${results[@]}" | jq -s '.'
 }
 
 # Fetch Reddit posts
